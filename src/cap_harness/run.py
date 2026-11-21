@@ -280,6 +280,17 @@ def run_program(
                 adapter.native_env,
             )
             adapter.bind_protocol_evaluator(protocol_evaluator)
+        elif benchmark == "libero-pro":
+            from .validation.evaluators.libero_subgoals import (
+                LiberoSubgoalWitness,
+                has_goal_predicates,
+            )
+
+            # Fakes and wrappers without BDDL goal predicates run without the witness.
+            native = getattr(adapter, "native_env", None)
+            if native is not None and has_goal_predicates(native):
+                protocol_evaluator = LiberoSubgoalWitness(metadata.task_ref, native)
+                adapter.bind_protocol_evaluator(protocol_evaluator)
         elif benchmark == "behavior":
             from .validation.evaluators.behavior_pickup import BehaviorPickupWitness
 

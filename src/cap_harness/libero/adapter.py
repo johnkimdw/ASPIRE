@@ -246,6 +246,7 @@ class LiberoAdapter:
         self._last_truncated = False
         self._action_bounds: tuple[np.ndarray, np.ndarray] | None = None
         self._extensions: Any | None = None
+        self._protocol_evaluator: Any | None = None
         self._closed = False
 
     @property
@@ -256,6 +257,17 @@ class LiberoAdapter:
     def native_env(self) -> Any:
         """Runtime-only access to the direct OffScreenRenderEnv instance."""
         return self._require_env()
+
+    def bind_protocol_evaluator(self, evaluator: Any) -> None:
+        """Attach one host-only evaluator after reset; never exposed to programs."""
+        if self._env is None:
+            raise RuntimeError("reset() must be called before binding an evaluator")
+        if self._protocol_evaluator is not None:
+            raise RuntimeError("a protocol evaluator is already bound")
+        if not callable(getattr(evaluator, "after_step", None)):
+            # Preserve the invalid-data ValueError contract.
+            raise ValueError("protocol evaluator must define after_step()")
+        self._protocol_evaluator = evaluator
 
     @property
     def current_time_s(self) -> float:
@@ -435,7 +447,7 @@ class LiberoAdapter:
             # randomization -- which is what previously pinned all 50 seeds to one
             # scene -- so seeded mode applies no saved state at all.
             state_index = None
-        elif not init_states:
+        elif len(init_states) == 0:
             raise ValueError(
                 f"{metadata.task_ref} ships no saved init states, so init_mode "
                 "'saved' cannot select a layout; use init_mode 'seeded'"
@@ -713,6 +725,8 @@ class LiberoAdapter:
             reward=self._last_reward,
             diagnostics={"native_info": self._last_native_info},
         )
+        if self._protocol_evaluator is not None:
+            self._protocol_evaluator.after_step(action, result)
         if self._run_observer is not None:
             self._run_observer.after_step(action, result)
         return result

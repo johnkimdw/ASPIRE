@@ -8,6 +8,7 @@ import contextlib
 from dataclasses import dataclass
 import importlib
 import io
+import os
 import time
 from types import MappingProxyType
 
@@ -303,6 +304,11 @@ class ProgramExecutor:
             "close_gripper",
             "go_home",
         }
+        # Opt-in: CAP_HARNESS_KEYFRAME_SKIP=step skips keyframes for those calls. A program that
+        # drives the arm tick by tick with step() otherwise writes two lossless frames per tick
+        # (about 1.3 GB per episode); the per-camera video still records every tick.
+        if name in _keyframe_skip():
+            motion = False
         if motion:
             self._recorder.keyframe(f"before-{name}")  # type: ignore[attr-defined]
         with self._recorder.span(  # type: ignore[attr-defined]
@@ -532,3 +538,8 @@ def _result_failure_code(value: object) -> str | None:
 ProgramResult = ProgramExecutionResult
 
 __all__ = ["CallTrace", "ProgramExecutionResult", "ProgramExecutor", "ProgramResult"]
+
+
+def _keyframe_skip() -> frozenset[str]:
+    raw = os.environ.get("CAP_HARNESS_KEYFRAME_SKIP", "")
+    return frozenset(part.strip() for part in raw.split(",") if part.strip())
